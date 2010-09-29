@@ -15,14 +15,14 @@ License:      GPLv2
 Group:        Documentation/SuSE
 Autoreqprov:  on
 Version:      1.0
-Release:      0
+Release:      DEV_20100929.1
 Source:       %{name}-%{version}.tar.gz
 Summary:      Supportconfig Plugin for Novell Sentinel
 BuildRoot:    %{_tmppath}/%{name}-%{version}-build
 BuildArch:    noarch
 Distribution: Novell NTS
 Vendor:       Novell Technical Services
-Requires:     supportconfig-plugin-resource-0.0.1
+Requires:     supportconfig-plugin-resource
 Requires:     sentinel
 
 %description
