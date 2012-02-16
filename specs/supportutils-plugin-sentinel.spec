@@ -15,7 +15,7 @@ License:      GPLv2
 Group:        Productivity/Security
 Autoreqprov:  on
 Version:      1.0.1
-Release:      1.1.20120216.PTF.2
+Release:      2
 Source:       %{name}-%{version}.tar.gz
 Summary:      Supportconfig Plugin for NetIQ Sentinel
 BuildRoot:    %{_tmppath}/%{name}-%{version}-build
