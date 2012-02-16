@@ -15,7 +15,7 @@ License:      GPLv2
 Group:        Productivity/Security
 Autoreqprov:  on
 Version:      1.0.1
-Release:      2
+Release:      4
 Source:       %{name}-%{version}.tar.gz
 Summary:      Supportconfig Plugin for NetIQ Sentinel
 BuildRoot:    %{_tmppath}/%{name}-%{version}-build
@@ -48,7 +48,7 @@ install -m 0644 sentplugin.properties.5.gz $RPM_BUILD_ROOT/usr/share/man/man5/se
 install -m 0644 sentplugin.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/sentplugin.8.gz
 
 %files
-%defattr(0755,root,root)
+%defattr(-,root,root)
 %dir /usr/lib/supportconfig
 %dir /usr/lib/supportconfig/plugins
 /usr/lib/supportconfig/plugins/sentplugin
