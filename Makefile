@@ -1,4 +1,4 @@
-OBSPACKAGE=supportutils-plugin-netiq-sentinel
+OBSPACKAGE=supportutils-plugin-sentinel
 SVNDIRS=specs scripts man
 VERSION=$(shell awk '/Version:/ { print $$2 }' specs/${OBSPACKAGE}.spec)
 RELEASE=$(shell awk '/Release:/ { print $$2 }' specs/${OBSPACKAGE}.spec)

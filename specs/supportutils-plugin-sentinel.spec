@@ -1,5 +1,5 @@
 #
-# spec file for package supportutils-plugin-netiq-sentinel (Version 1.0-1)
+# spec file for package supportutils-plugin-sentinel (Version 1.0)
 #
 # Copyright (C) 2012 NetIQ, Inc.
 # This file and all modifications and additions to the pristine
@@ -9,7 +9,7 @@
 # norootforbuild
 # neededforbuild  
 
-Name:         supportutils-plugin-netiq-sentinel
+Name:         supportutils-plugin-sentinel
 License:      GPLv2
 Group:        Productivity/Security
 Autoreqprov:  on
@@ -59,6 +59,9 @@ install -m 0644 sentplugin.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/sentplugin.8.
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Feb 16 2012 jrecord@novell.com
+-Port to integrated plugin under OBS
+
 * Fri Jan 27 2012 ab@novell.com
 -Fixing issue with psql command in script
 -Fixing spec file to treat sentplugin.properties as config file
