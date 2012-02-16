@@ -1,0 +1,282 @@
+#!/bin/bash
+###############################################################
+# Name:        Sentinel Supportconfig Plugin
+# Description: Gathers troubleshooting information directly
+#              related to the Sentinel line of products.
+###############################################################
+
+STARTTIME=`date +%s`
+SVER='1.00-20120120073000Z'
+LOG_LINES='500'
+CHKCONFIGBIN=`which chkconfig`
+AWKBIN=`which awk`
+GREPBIN=`which grep`
+EGREPBIN=`which egrep`
+SUBIN=`which su`
+SNTPBIN=`which sntp`
+SECTIONFAILSTR='Sentinel Plugin Notice:'
+RCFILE='/usr/lib/supportconfig/resources/scplugin.rc'
+
+[ -s $RCFILE ] && . $RCFILE || { echo "ERROR: Initializing resource file: $RCFILE"; exit 1; }
+
+detect_sentinel_product_version() {
+  export ALLOW_ROOT=1
+  if [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel6/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel6/bin/setenv.sh'
+    export SENTPROD='Sentinel'
+    export SENTVERSION='6.x'
+  elif [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel_log_mgr/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel_log_mgr/bin/setenv.sh'
+    export SENTPROD='LogManager'
+    export SENTVERSION='1'
+  elif [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel_log_mgr_x86-64/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel_log_mgr_x86-64/bin/setenv.sh'
+    export SENTPROD='LogManager'
+    export SENTVERSION='1'
+  elif [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel_rd/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel_rd/bin/setenv.sh'
+    export SENTPROD='Sentinel'
+    export SENTVERSION='RD'
+  elif [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel6_rd_x86-64/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel6_rd_x86-64/bin/setenv.sh'
+    export SENTPROD='Sentinel'
+    export SENTVERSION='RD'
+  elif [[ -f ${SENTINSTALLBASE}'/opt/novell/sentinel/bin/setenv.sh' ]]; then
+    source ${SENTINSTALLBASE}'/opt/novell/sentinel/bin/setenv.sh'
+    export SENTPROD='Sentinel'
+    export SENTVERSION='7'
+  fi
+
+  echo "Sentinel Product: ${SENTPROD}, version ${SENTVERSION} detected."
+  # [[ `echo "${ESEC_VERSION}" | ${EGREPBIN} '6.1.+'` ]];
+}
+
+
+section_header "Sentinel Supportconfig Plugin, v${SVER}, starting at ${STARTTIME}."
+echo
+
+#Check for alternate Sentinel products' base install location.
+if [[ -f '/usr/lib/supportconfig/plugins/sentplugin.properties' ]]; then
+  source '/usr/lib/supportconfig/plugins/sentplugin.properties';
+else
+  export SENTINSTALLBASE=''
+fi
+
+detect_sentinel_product_version
+
+section_header "Sentinel Environment Variables for root"
+if ! env | ${GREPBIN} '^ESEC_'; then
+  echo "ERROR: Sentinel environment variables not set"
+  echo "${SECTIONFAILSTR}"
+fi
+
+section_header 'System Daemon Status'
+if [[ "${SENTPROD}" = 'LogManager' ]]; then
+  #A Log Manager system.
+  if [[ -f '/etc/init.d/sentinel_log_mgr' ]]; then
+    plugin_command "${CHKCONFIGBIN} -l sentinel_log_mgr"
+    plugin_command "/etc/init.d/sentinel_log_mgr status"
+  fi
+else
+  #Sentinel-anything (as of 2011-10-27).
+  if [[ -f '/etc/init.d/sentinel' ]]; then
+    plugin_command "${CHKCONFIGBIN} -l sentinel"
+    plugin_command "/etc/init.d/sentinel status"
+  fi
+fi
+
+section_header 'Network Port Status'
+plugin_command "netstat -nap | ${EGREPBIN} '61616|10012|10013|10014|5432|8080|8443|1289|1514|1468|1443'"
+plugin_command "netstat -nap | ${EGREPBIN} 'java|postgres|mongod'"
+
+section_header 'Local Database Versions, Patches, and Other Information'
+if [[ "${SENTPROD}" = 'LogManager' || ( ${SENTPROD} = 'Sentinel' && ${SENTVERSION} != '6.x' ) ]]; then
+  if [[ -x "${ESEC_HOME}/3rdparty/postgresql/bin/psql" ]]; then
+    #Get information from DB tables on versioning and patches.  Because of the need to use the ~/.pgpass file of the 
+    #service-owning user this may take a little bit of interesting trickery.
+    if [[ -z "${SENTDBA}" ]]; then
+      export SENTDBA='dbauser'
+    fi
+    #First get a list of available databases.
+    plugin_command "${SUBIN} - ${ESEC_USER} -c 'source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --list'"
+    SENTDBNAME=`${SUBIN} - ${ESEC_USER} -c "source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --list | ${GREPBIN} ${SENTDBA} | ${AWKBIN} '{print \\$1}' | ${GREPBIN} -v '_WF$' | head -1"`
+    if [[ -z "${SENTDBNAME}" ]] ; then
+      echo 'Unable to determine database name to query.'
+    else
+      plugin_command "${SUBIN} - ${ESEC_USER} -c \"source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --dbname=${SENTDBNAME} --command='SELECT db_version, applied_date, applied_by, sts FROM ESEC_DB_VERSION;'\""
+      plugin_command "${SUBIN} - ${ESEC_USER} -c \"source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --dbname=${SENTDBNAME} --command='SELECT db_patch, date_applied, applied_by, sts FROM ESEC_DB_PATCHES;'\""
+      plugin_command "${SUBIN} - ${ESEC_USER} -c \"source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --dbname=${SENTDBNAME} --command='\d raw_data_files_info;'\""
+      plugin_command "${SUBIN} - ${ESEC_USER} -c \"source ${ESEC_HOME}/bin/setenv.sh >/dev/null 2>&1; ${ESEC_HOME}/3rdparty/postgresql/bin/psql -U ${SENTDBA} --dbname=${SENTDBNAME} --command='SELECT count(id) from raw_data_files_info;'\""
+    fi
+  else
+    echo "File ${ESEC_HOME}/3rdparty/postgresql/bin/psql not found or not executable; this could mean the server is simply not hosting the database (Collector Manager, Correlation Engine, etc.)."
+  fi
+else
+  echo 'Product not valid for local database checks.'
+fi
+
+section_header 'Sentinel 6.x Broker Connections'
+if [[ "${SENTPROD}" = 'Sentinel' && "${SENTVERSION}" = '6.x' && -d "${ESEC_HOME}" ]]; then
+  plugin_command "${ESEC_HOME}/bin/list_broker_connections.sh 127.0.0.1 10012"
+else
+  echo "${SECTIONFAILSTR} Not Sentinel 6.x OR ${ESEC_HOME} did not exist."
+fi
+
+section_header 'Process Information'
+if [[ -z "${ESEC_USER}" ]] ; then
+  echo 'Unable to determine username for Sentinel processes.'
+else
+  #Find all of the PIDs related to Sentinel and put them in an array for use.
+  declare -a SENTPIDS=`ps aux | ${GREPBIN} ${ESEC_USER} | ${GREPBIN} -v 'grep' | ${GREPBIN} -v 'bash' | ${GREPBIN} -v 'sshd' | ${GREPBIN} -v 'ps aux' | ${AWKBIN} '{print $2}'`
+  for i in ${SENTPIDS}; do
+    if [[ -d "/proc/$i" ]]; then
+      plugin_command "/bin/ls -al /proc/$i/exe"
+      plugin_command "/bin/ls -al /proc/$i/cwd"
+      plugin_command "/usr/bin/strings /proc/$i/cmdline"
+      plugin_command "/usr/bin/strings /proc/$i/environ"
+      plugin_command "/usr/bin/strings /proc/$i/io"
+      plugin_command "/usr/bin/strings /proc/$i/limits"
+      plugin_command "/bin/cat /proc/$i/loginuid"
+      plugin_command "strings /proc/$i/maps"
+      plugin_command "strings /proc/$i/mountinfo"
+      plugin_command "strings /proc/$i/mounts"
+      plugin_command "strings /proc/$i/status"
+    else
+      echo "Unable to find process directory for PID $i"
+    fi
+  done
+fi
+
+section_header 'JAR File Version Compatibility'
+if [[ -d "${ESEC_HOME}/bin" ]]; then
+  for SJAR in $(find ${ESEC_HOME}/lib -type f | ${GREPBIN} jar$ | sort)
+  do
+    printf "%-60s - %s\n" "$SJAR" "$(${ESEC_HOME}/bin/versionreader.sh $SJAR 2>&1)"
+  done
+else
+  echo "${SECTIONFAILSTR} ${ESEC_HOME}/bin does not exist."
+fi
+
+section_header 'Configuration Files'
+if [[ ! -n "${ESEC_HOME}" && ! -n "${ESEC_CONFIG_HOME}" ]] ; then
+  echo "${SECTIONFAILSTR} No config directory specified."
+else
+  #Setup variable for config dir, then use it to find files.
+  if [[ -n "${ESEC_CONFIG_HOME}" && -d "${ESEC_CONFIG_HOME}/config" ]]; then
+    CONFDIR="${ESEC_CONFIG_HOME}/config"
+  elif [[ -n "${ESEC_HOME}" && -d "${ESEC_HOME}/config" ]]; then
+    CONFDIR="${ESEC_HOME}/config"
+  else echo "${SECTIONFAILSTR} Config directory not accessible.";
+  fi
+if [[ -n "${CONFDIR}" ]]; then
+    #Get all config directory files.
+    for CLOG in $(find ${CONFDIR} -type f | sort)
+    do
+      if [[ `echo "${CLOG}" | ${EGREPBIN} 'activemqusers.properties$'` ]]; then
+        echo "#-> ${CLOG} skipped for security reasons."
+        echo
+        continue
+      fi
+      if [[ `file ${CLOG} | ${GREPBIN} -v 'text' | ${GREPBIN} -iv 'xml'` ]]; then
+        plugin_command "base64 ${CLOG}"
+      else
+        plog_files '0' "${CLOG}"
+      fi
+    done
+  fi
+fi
+
+#Third-party Jetty configuration files.
+if [[ -n "${ESEC_CONFIG_HOME}" && -d "${ESEC_CONFIG_HOME}/3rdparty" ]]; then
+  if [[ "${SENTPROD}" = 'Sentinel' && "${SENTVERSION}" = '7' ]]; then
+    JETTYCONFDIR="${ESEC_CONFIG_HOME}/3rdparty/jetty"
+    for CLOG in $(find ${JETTYCONFDIR} -type f | sort); do
+      if [[ `file ${CLOG} | ${GREPBIN} -v 'text' | ${GREPBIN} -iv 'xml'` ]]; then
+        plugin_command "base64 ${CLOG}"
+      else
+        plog_files '0' "${CLOG}"
+      fi
+    done
+  fi
+fi
+
+section_header "Log Files: Last ${LOG_LINES} Lines"
+if [[ ! -n "${ESEC_HOME}" && ! -n "${ESEC_LOG_HOME}" ]] ; then
+  echo "${SECTIONFAILSTR} No log directory defined."
+else
+  #Setup variable for log dir, then use it to find files.
+  if [[ -n "${ESEC_LOG_HOME}" && -d "${ESEC_LOG_HOME}/log" ]]; then
+    LOGDIR="${ESEC_LOG_HOME}/log"
+  elif [[ -n "${ESEC_HOME}" && -d "${ESEC_HOME}/log" ]]; then
+    LOGDIR="${ESEC_HOME}/log"
+  else echo "${SECTIONFAILSTR} Log directory not accessible.";
+  fi
+
+  if [[ -n "${LOGDIR}" ]]; then
+    #Tail all log directory files.
+    for CLOG in $(find ${LOGDIR} -type f | grep -v 'hprof$' | sort)
+    do
+      plog_files "${LOG_LINES}" "${CLOG}"
+    done
+  fi
+fi
+
+section_header "3rd Party Sentinel 6.x Log Files: Last ${LOG_LINES} Lines"
+if [[ "${SENTPROD}" = 'Sentinel' && "${SENTVERSION}" = '6.x' && -d "${ESEC_HOME}/3rdparty" ]]; then
+  #These are so far only useful from Sentinel 6.x from the Sonic logs.
+  for TLOG in $(find ${ESEC_HOME}/3rdparty -type f | ${GREPBIN} 'log$' | ${EGREPBIN} 'esec' | sort)
+  do
+    plog_files "${LOG_LINES}" "${TLOG}"
+  done
+else
+  echo "${SECTIONFAILSTR} Not Sentinel 6.x OR no access to ${ESEC_HOME}/3rdparty directory."
+fi
+
+section_header "Installation Logs from Sentinel 6.x: Last ${LOG_LINES} Lines"
+if [[ "${SENTPROD}" = 'Sentinel' && "${SENTVERSION}" = '6.x' && -d "${ESEC_HOME}/install_log" ]]; then
+  #These are only additionally useful for Sentinel 6.x; other products keep logs in the log directory.
+  for ILOG in $(find ${ESEC_HOME}/install_log/ -type f | sort)
+  do
+    plog_files "${LOG_LINES}" "${ILOG}"
+  done
+else
+  echo "${SECTIONFAILSTR} Not Sentinel 6.x OR no access to ${ESEC_HOME}/install_log directory."
+fi
+
+section_header 'NTP Configuration Information'
+#Get the ntp.conf file contents just for fun.
+if [[ -r '/etc/ntp.conf' ]]; then
+  plog_files '0' '/etc/ntp.conf'
+  #Use sntp to see what we can find out about time synchronization.
+  declare -a NTPSERVERS=`${GREPBIN} '^server ' /etc/ntp.conf | ${AWKBIN} '{print $2}'`
+  for i in ${NTPSERVERS}; do
+    plugin_command "${SNTPBIN} $i"
+  done
+else
+  echo 'Unable to read /etc/ntp.conf on server.'
+fi
+plugin_command "${SNTPBIN} pool.ntp.org"
+
+section_header 'Various Datafiles Listing'
+if [[ ! -n "${ESEC_HOME}" && ! -n "${ESEC_DATA_HOME}" ]] ; then
+  echo "${SECTIONFAILSTR} No data directory defined."
+else
+  #Setup variable for data dir, then use it to find files.
+  if [[ -n "${ESEC_DATA_HOME}" && -d "${ESEC_DATA_HOME}/data" ]]; then
+    DATADIR="${ESEC_DATA_HOME}/data"
+  elif [[ -n "${ESEC_HOME}" && -d "${ESEC_HOME}/data" ]]; then
+    DATADIR="${ESEC_HOME}/data"
+  else echo "${SECTIONFAILSTR} Data directory not accessible.";
+  fi
+
+  if [[ -d "${DATADIR}" ]]; then
+    #Get a listing of all files in this directry structure.
+    find ${DATADIR} -type f -print0 | xargs -0 ls -l
+  else echo "${SECTIONFAILSTR} Not able to access ${DATADIR} for some reason.";
+  fi
+fi
+
+ENDTIME=`date +%s`
+echo
+echo "Sentinel supportconfig plugin execution completed at ${ENDTIME} after running for `echo ${ENDTIME}-${STARTTIME} | bc -l` seconds."
+
