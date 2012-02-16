@@ -1,7 +1,7 @@
 #
-# spec file for package supportutils-plugin-sentinel (Version 1.0-0)
+# spec file for package supportutils-plugin-netiq-sentinel (Version 1.0-1)
 #
-# Copyright (C) 2010 Novell, Inc.
+# Copyright (C) 2012 NetIQ, Inc.
 # This file and all modifications and additions to the pristine
 # package are under the same license as the package itself.
 #
@@ -9,55 +9,65 @@
 # norootforbuild
 # neededforbuild  
 
-Name:         supportutils-plugin-sentinel
-URL:          http://www.novell.com/products/sentinel/overview.html
+Name:         supportutils-plugin-netiq-sentinel
 License:      GPLv2
-Group:        Documentation/SuSE
+Group:        Productivity/Security
 Autoreqprov:  on
-Version:      1.0
-Release:      DEV_20100929.1
+Version:      1.0.1
+Release:      1.1.20120216.PTF.1
 Source:       %{name}-%{version}.tar.gz
-Summary:      Supportconfig Plugin for Novell Sentinel
+Summary:      Supportconfig Plugin for NetIQ Sentinel
 BuildRoot:    %{_tmppath}/%{name}-%{version}-build
 BuildArch:    noarch
-Distribution: Novell NTS
-Vendor:       Novell Technical Services
-Requires:     supportconfig-plugin-resource
-Requires:     sentinel
+Vendor:       NetIQ
+Requires:     supportutils
 
 %description
-Supportconfig plugin for Novell Sentinel. Gathers information directly 
-related to Sentinel. Plugins extend supportconfig functionality and 
-include the output in the supportconfig tar ball. Supportconfig saves 
-the plugin output as plugin-sentinel.txt.
-
-Please submit bug fixes or comments via:
-    https://code.google.com/p/supportutils-plugin-sentinel/issues/list
+Sentinel plugin for the supportconfig command (part of the supportutils package) to gather Sentinel-specific information during execution of supportconfig.
 
 Authors:
---------
-    Jason Record <jrecord@novell.com>
+Aaron Burgemeister, ab@novell.com, dajoker@gmail.com
 
 %prep
 %setup -q
+
 %build
-gzip -9f sentinel-plugin.8
+gzip -9f sentplugin.8
+gzip -9f sentplugin.properties.5
 
 %install
 pwd;ls -la
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT/opt/supportconfig/plugins
+install -d $RPM_BUILD_ROOT/usr/lib/supportconfig/plugins
+install -d $RPM_BUILD_ROOT/usr/share/man/man5
 install -d $RPM_BUILD_ROOT/usr/share/man/man8
-install -m 0500 sentinel $RPM_BUILD_ROOT/opt/supportconfig/plugins
-install -m 0644 sentinel-plugin.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/sentinel-plugin.8.gz
+install -m 0544 sentplugin $RPM_BUILD_ROOT/usr/lib/supportconfig/plugins
+install -m 0644 sentplugin.properties $RPM_BUILD_ROOT/usr/lib/supportconfig/plugins
+install -m 0644 sentplugin.properties.5.gz $RPM_BUILD_ROOT/usr/share/man/man5/sentplugin.properties.5.gz
+install -m 0644 sentplugin.8.gz $RPM_BUILD_ROOT/usr/share/man/man8/sentplugin.8.gz
 
 %files
-%defattr(-,root,root)
-/opt/supportconfig/plugins/*
-/usr/share/man/man8/sentinel-plugin.8.gz
+%defattr(0755,root,root)
+%dir /usr/lib/supportconfig
+%dir /usr/lib/supportconfig/plugins
+/usr/lib/supportconfig/plugins/sentplugin
+%config /usr/lib/supportconfig/plugins/sentplugin.properties
+/usr/share/man/man5/sentplugin.properties.5.gz
+/usr/share/man/man8/sentplugin.8.gz
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%changelog -n supportutils-plugin-sentinel
+%changelog
+* Fri Jan 27 2012 ab@novell.com
+-Fixing issue with psql command in script
+-Fixing spec file to treat sentplugin.properties as config file
+-Excluding gathering of last 500 lines of files ending in .hprof (memory dumps) from log directory.
+
+* Fri Jan 20 2012 ab@novell.com
+-Adding ability to pick up Jetty configuration files in Sentinel 7.
+
+* Mon Jan 16 2012 ab@novell.com
+-Adding support for alternate Sentinel/LogManager install base locations via sentplugin.properties file
+
 

@@ -1,4 +1,4 @@
-OBSPACKAGE=supportutils-plugin-sentinel
+OBSPACKAGE=supportutils-plugin-netiq-sentinel
 SVNDIRS=specs scripts man
 VERSION=$(shell awk '/Version:/ { print $$2 }' specs/${OBSPACKAGE}.spec)
 RELEASE=$(shell awk '/Release:/ { print $$2 }' specs/${OBSPACKAGE}.spec)
@@ -14,9 +14,6 @@ install: dist
 	@echo ==================================================================
 	cp src/$(SRCFILE).gz $(BUILDDIR)/SOURCES
 	cp specs/$(OBSPACKAGE).spec $(BUILDDIR)/SPECS
-	cp specs/$(OBSPACKAGE).changes $(BUILDDIR)/SPECS
-	/usr/lib/build/changelog2spec $(BUILDDIR)/SPECS/$(OBSPACKAGE).changes >> $(BUILDDIR)/SPECS/$(OBSPACKAGE).spec
-	rm -f $(BUILDDIR)/SPECS/$(OBSPACKAGE).changes
 	@echo
 
 uninstall:
@@ -90,7 +87,6 @@ commit: build
 	osc ci -m "Removing old files before committing: $(OBSPACKAGE)-$(VERSION)-$(RELEASE)" Novell:NTS/$(OBSPACKAGE)
 	@rm -f Novell:NTS/$(OBSPACKAGE)/*
 	cp specs/$(OBSPACKAGE).spec Novell:NTS/$(OBSPACKAGE)
-	cp specs/$(OBSPACKAGE).changes Novell:NTS/$(OBSPACKAGE)
 	cp src/$(SRCFILE).gz Novell:NTS/$(OBSPACKAGE)
 	osc add Novell:NTS/$(OBSPACKAGE)/*
 	osc up Novell:NTS/$(OBSPACKAGE)
@@ -99,10 +95,21 @@ commit: build
 	svn ci -m "Committed to OBS: $(OBSPACKAGE)-$(VERSION)-$(RELEASE)"
 	@echo
 
+obsetup:
+	@echo ==================================================================
+	@echo Setup OBS Novell:NTS/$(OBSPACKAGE)
+	@echo ==================================================================
+	@rm -rf Novell:NTS
+	osc co Novell:NTS/$(OBSPACKAGE)
+	@rm -f Novell:NTS/$(OBSPACKAGE)/*
+	cp specs/$(OBSPACKAGE).spec Novell:NTS/$(OBSPACKAGE)
+	cp src/$(SRCFILE).gz Novell:NTS/$(OBSPACKAGE)
+	osc status Novell:NTS/$(OBSPACKAGE)
+
 help:
 	@clear
 	@make -v
 	@echo
 	@echo Make options for package: $(OBSPACKAGE)
-	@echo make {install, uninstall, dist, clean, allclean, build[default], buildci, commit}
+	@echo make {install, uninstall, dist, clean, allclean, build[default], buildci, obsetup, commit}
 	@echo
